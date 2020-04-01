@@ -3,9 +3,15 @@ import styles from './Home.css'
 import * as THREE from 'three'
 import * as CANNON from 'cannon'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
-import 'cannon/tools/threejs/CannonDebugRenderer'
+import CannonDebugRenderer from './../../utils/CannonDebugRenderer'
 import Stats from 'stats.js'
 import dat from 'dat.gui'
+import px from '../../static/img/cubemap/px.jpg'
+import nx from '../../static/img/cubemap/nx.jpg'
+import py from '../../static/img/cubemap/py.jpg'
+import ny from '../../static/img/cubemap/ny.jpg'
+import pz from '../../static/img/cubemap/pz.jpg'
+import nz from '../../static/img/cubemap/nz.jpg'
 
 // THREE
 let scene, camera, renderer, controls
@@ -53,13 +59,46 @@ class Home extends React.Component {
     renderer.setSize(innerWidth, innerHeight)
     renderer.setPixelRatio(devicePixelRatio)
 
-    this.balloonMat = new THREE.MeshStandardMaterial({color: 0xff0000, emissive: 0x000000, roughness: .5})
-
-
     scene = new THREE.Scene()
 
-    // const ambientLight = new THREE.AmbientLight(0xffffff, .4)
-    // scene.add(ambientLight)
+    this.balloonMat = new THREE.MeshStandardMaterial({
+      color: 0xff0000, 
+      emissive: 0x480000, 
+      roughness: .25, 
+      metalness: 0, 
+      opacity: .9, 
+      transparent: true,
+      // envMap: this.cubeTexture
+    })
+
+    this.cubeTexture = new THREE.CubeTextureLoader()
+      .load([px, nx, py, ny, pz, nz], () => {
+        // cubeMat.envMap = this.cubeTexture
+        // cubeMat.needsUpdate = true
+        console.log(this.cubeTexture)
+      })
+
+    this.cubeTexture.encoding = THREE.sRGBEncoding
+    // this.cubeTexture.minFilter = THREE.NearestFilter
+    // this.cubeTexture.magFilter = THREE.NearestFilter
+
+    const cubeGeo = new THREE.BoxGeometry(1, 1, 1)
+    const cubeMat = new THREE.MeshStandardMaterial({
+      color: 0x000000,
+      metalness: 0,
+      roughness: 0,
+      envMap: this.cubeTexture,
+      envMapIntensity: 1.0,
+      side: THREE.DoubleSide
+    })
+    const cube = new THREE.Mesh(cubeGeo, cubeMat)
+    scene.add(cube)
+    cube.position.set(0, 0, -2)
+
+    // scene.background = this.cubeTexture
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, .1)
+    scene.add(ambientLight)
     
     camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, .1, 1000)
     camera.position.set(0, 0, 2)
@@ -74,7 +113,9 @@ class Home extends React.Component {
     world.broadphase = new CANNON.NaiveBroadphase()
     world.gravity.set(0, 1, 0)
 
-    cannonDebugRenderer = new THREE.CannonDebugRenderer(scene, world)
+    cannonDebugRenderer = new CannonDebugRenderer(scene, world)
+    
+    this.addRoom()
 
     // Stats.js
     stats = new Stats()
@@ -84,6 +125,9 @@ class Home extends React.Component {
     const gui = new dat.GUI()
     gui.add(this, 'debug')
 
+    const lightFolder = gui.addFolder('light')
+    lightFolder.add(this.pointLight, 'intensity', 0, 2)
+    
     const gravityFolder = gui.addFolder('gravity')
     gravityFolder.add(this, 'gravityX', -10, 10).step(.1).listen()
     gravityFolder.add(this, 'gravityY', -10, 10).step(.1).listen()
@@ -95,11 +139,13 @@ class Home extends React.Component {
     const boxesFolder = gui.addFolder('ballons')
     boxesFolder.add(this, 'hasToAddBalloon').name('stream balloons')
     boxesFolder.add(this, 'addBalloon')
+    boxesFolder.add(this, 'resetBalloon').name('reset')
     boxesFolder.add(this.balloonMat, 'roughness', 0, 1)
     boxesFolder.add(this.balloonMat, 'metalness', 0, 1)
+    // boxesFolder.add(this.balloonMat, 'shininess', 0, 30)
+    
+    boxesFolder.add(this.balloonMat, 'opacity', 0, 1)
     boxesFolder.open()
-
-    console.log(this.balloonMat)
     
     const controlsFolder = gui.addFolder('controls')
     controlsFolder.add(controls, 'enabled')
@@ -111,7 +157,9 @@ class Home extends React.Component {
     roomFolder.add(this, 'reset')
     roomFolder.add(this, 'rotateSpeed', -.1, .1).step(.01).name('speed')
     // roomFolder.open()
+  }
 
+  addRoom() {
     roomMaterial = new CANNON.Material('roomMaterial')
     balloonMaterial = new CANNON.Material('balloonMaterial')
 
@@ -127,10 +175,6 @@ class Home extends React.Component {
     world.addContactMaterial(roomBalloonContactMaterial)
     world.addContactMaterial(balloonBalloonContactMaterial)
 
-    this.addRoom()
-  }
-
-  addRoom() {
     const adjacent = camera.position.z
     const hypothenuse = adjacent / Math.cos(camera.fov / 2 * Math.PI / 180)
     const opposite = Math.sqrt(Math.pow(hypothenuse, 2) - Math.pow(adjacent, 2))
@@ -171,18 +215,15 @@ class Home extends React.Component {
 
     const rectLight = new THREE.RectAreaLight(0xffffff, 3, width, width)
     rectLight.position.set(0, height/2, -width/2)
-    scene.add(rectLight)
+    room.add(rectLight)
     rectLight.lookAt(0, 0, -width/2)
 
     const rectLightHelper = new THREE.RectAreaLightHelper(rectLight)
     rectLight.add(rectLightHelper)
 
-    const pointLight = new THREE.PointLight(0xffffff, .7)
-    pointLight.position.set(0, 0, -width/2)
-    scene.add(pointLight)
-
-    const pointLightHelper = new THREE.PointLightHelper(pointLight)
-    scene.add(pointLightHelper)
+    this.pointLight = new THREE.PointLight(0xffffff, .7)
+    this.pointLight.position.set(0, 0, -width/2)
+    scene.add(this.pointLight)
 
     const bottom = new THREE.Mesh(planeGeom2, planeMat)
     bottom.position.z = -width / 2
@@ -255,6 +296,15 @@ class Home extends React.Component {
     balloons.push(obj)
   }
 
+  resetBalloon() {
+    balloons.forEach(balloon => {
+      scene.remove(balloon)
+      world.remove(balloon.body)
+    })
+
+    balloons = []
+  }
+
   animate(time) {
     requestAnimationFrame(this.animate)
     
@@ -291,8 +341,10 @@ class Home extends React.Component {
       this.gravityY = Math.sin(time * this.rotateGravitySpeed) * this.rotateGravityAmplitude
     }
 
-    room.position.copy(room.body.position)
-    room.quaternion.copy(room.body.quaternion)
+    if (room) {
+      room.position.copy(room.body.position)
+      room.quaternion.copy(room.body.quaternion)
+    }
 
     world.gravity.set(this.gravityX, this.gravityY, 0)
 
