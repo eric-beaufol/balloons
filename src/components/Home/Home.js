@@ -27,7 +27,7 @@ const mouse = new THREE.Vector2(), raycaster = new THREE.Raycaster()
 let world, lastTime, roomMaterial, balloonMaterial
 
 // Mixed
-let balloons = [], room, cannonDebugRenderer, resizeTimer
+let balloons = [], room, cannonDebugRenderer, resizeTimer, lastBalloon
 
 // UI
 let streamDelay = 0
@@ -43,7 +43,7 @@ class Home extends React.Component {
     this.gravityX = 0
     this.gravityY = -0.5
     this.gravityZ = 0
-    this.gazForce = 3.13
+    this.gazForce = .9
     this.rotateGravity = false
     this.streamBalloons = false
     this.rotate = false
@@ -55,8 +55,12 @@ class Home extends React.Component {
     this.canExplodeBalloons = false
     this.color = '#ffbcbc'
     this.emissive = '#d44aff'
+    this.randomColor = false
     this.groundConstraint = false
+    this.groupConstraint = false
+    this.groupConstraint2 = false
     this.balloonGetString = true
+    this.basicMaterial = false
 
     this.canvas = React.createRef()
     this.animate = this.animate.bind(this)
@@ -80,7 +84,7 @@ class Home extends React.Component {
 
     renderer = new THREE.WebGLRenderer({antialias: true, canvas: this.canvas})
     renderer.setSize(innerWidth, innerHeight)
-    renderer.setPixelRatio(devicePixelRatio)
+    // renderer.setPixelRatio(devicePixelRatio)
     renderer.shadowMap.enabled = true
 
     scene = new THREE.Scene()
@@ -128,6 +132,7 @@ class Home extends React.Component {
       envMap: this.cubeTexture,
       combine: THREE.MultiplyOperation,
       reflectivity: .6,
+      premultipliedAlpha: true
     })
 
     this.ambientLight = new THREE.AmbientLight(0xffffff, .38)
@@ -174,16 +179,53 @@ class Home extends React.Component {
     // gravityFolder.open()
 
     const balloonsFolder = gui.addFolder('ballons')
-    balloonsFolder.add(this, 'streamBalloons').name('stream balloons')
+    balloonsFolder.add(this, 'streamBalloons').name('stream balloons').onChange(() => {
+      if (!this.streamBalloons) {
+        lastBalloon = null
+      }
+    })
     balloonsFolder.add(this, 'addBalloon')
     balloonsFolder.add(this, 'resetBalloon').name('reset')
-    balloonsFolder.add(this, 'groundConstraint').name('attach balloon')
+    balloonsFolder.add(this, 'groundConstraint').name('ground link').onChange(() => {
+      if (this.groundConstraint && this.groupConstraint) {
+        this.groupConstraint = false
+      }
+      if (this.groundConstraint && !this.balloonGetString) {
+        this.balloonGetString = true
+      }
+    }).listen()
+    balloonsFolder.add(this, 'groupConstraint').name('group link').onChange(() => {
+      if (this.groupConstraint) {
+        if (this.groundConstraint) {
+          this.groundConstraint = false
+        }
+        if (this.groupConstraint2) {
+          this.groupConstraint2 = false
+        }
+      }
+    }).listen()
+    balloonsFolder.add(this, 'groupConstraint2').name('group link 2').onChange(() => {
+      if (this.groundConstraint) {
+        if (this.groupConstraint) {
+          this.groundConstraint = false
+        }
+        if (this.groupConstraint) {
+          this.groupConstraint = false
+        }
+      }
+    }).listen()
+    balloonsFolder.add(this, 'balloonGetString').name('string').onChange(() => {
+      if (!this.balloonGetString) {
+        this.groundConstraint = false
+        this.groupConstraint2 = false
+      }
+    }).listen()
     balloonsFolder.add(this, 'canExplodeBalloons').name('explode click')
     balloonsFolder.add(this, 'explosionForce', 1, 8).name('explosion force')
     balloonsFolder.add(this, 'gazForce', 0, 10).name('gaz force')
-    balloonsFolder.add(this, 'balloonGetString').name('string')
     // boxesFolder.add(this.balloonMat, 'shininess', 0, 30)
 
+    balloonsFolder.add(this, 'basicMaterial').name('basic material')
     balloonsFolder.add(this.balloonMat, 'opacity', 0, 1)
     balloonsFolder.add(this.balloonMat, 'reflectivity', 0, 1)
     balloonsFolder.add(this.balloonMat, 'emissiveIntensity', 0, 1)
@@ -199,16 +241,17 @@ class Home extends React.Component {
     normalFolder.add(this.balloonMat.normalScale, 'y', 0, 10).name('scale y')
     // normalFolder.open()
 
-    const colorsFolder = gui.addFolder('colors')
-    colorsFolder.addColor(this, 'color').onChange(() => {
+    const colorFolder = gui.addFolder('colors')
+    colorFolder.addColor(this, 'color').onChange(() => {
       this.balloonMat.color = new THREE.Color(this.color)
       this.balloonMat.needsUpdate = true
     })
-    colorsFolder.addColor(this, 'emissive').onChange(() => {
+    colorFolder.addColor(this, 'emissive').onChange(() => {
       this.balloonMat.emissive = new THREE.Color(this.emissive)
       this.balloonMat.needsUpdate = true
     })
-    // colorsFolder.open()
+    colorFolder.add(this, 'randomColor').name('random')
+    colorFolder.open()
     
     const controlsFolder = gui.addFolder('controls')
     controlsFolder.add(controls, 'enabled')
@@ -261,19 +304,19 @@ class Home extends React.Component {
     right.receiveShadow = true
     room.add(right)
 
-    // const top = new THREE.Mesh(planeGeom2, planeMat)
-    // top.position.z = -width / 2
-    // top.position.y = height / 2
-    // top.rotation.x = Math.PI / 2
-    // top.receiveShadow = true
-    // room.add(top)
+    const top = new THREE.Mesh(planeGeom2, new THREE.MeshBasicMaterial({color: 0xffffff}))
+    top.position.z = -width / 2
+    top.position.y = height / 2
+    top.rotation.x = Math.PI / 2
+    top.receiveShadow = true
+    room.add(top)
 
-    const rectLight = new THREE.RectAreaLight(0xffffff, 3, width, width)
-    rectLight.position.set(0, height/2, -width/2)
-    rectLight.lookAt(0, 0, -width/2)
-    room.add(rectLight)
-    const rectLightHelper = new THREE.RectAreaLightHelper(rectLight)
-    rectLight.add(rectLightHelper)
+    // const rectLight = new THREE.RectAreaLight(0xffffff, 3, width, width)
+    // rectLight.position.set(0, height/2, -width/2)
+    // rectLight.lookAt(0, 0, -width/2)
+    // room.add(rectLight)
+    // const rectLightHelper = new THREE.RectAreaLightHelper(rectLight)
+    // rectLight.add(rectLightHelper)
 
     this.pointLight = new THREE.PointLight(0xffffff, .35)
     this.pointLight.position.set(0, 0, -width/2)
@@ -363,8 +406,21 @@ class Home extends React.Component {
     geo.translate(0, -height/2 - .1, 0)
     geo.attributes.uv2 = geo.attributes.uv
 
-    const mesh = new THREE.Mesh(geo, this.balloonMat)
+    let mat = this.balloonMat
+
+    if (this.randomColor) {
+      mat = new THREE.MeshPhongMaterial().copy(this.balloonMat)
+      mat.color = new THREE.Color().setHSL(Math.random() * 1, .7, .65)
+      mat.emissive = new THREE.Color().setHSL(Math.random() * 1, .7, .65)
+    }
+
+    if (this.basicMaterial) {
+      mat = undefined
+    }
+
+    const mesh = new THREE.Mesh(geo, mat)
     mesh.isBalloon = true
+    mesh.constraints = []
     obj.add(mesh)
     scene.add(obj)
 
@@ -378,7 +434,7 @@ class Home extends React.Component {
     quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), Math.PI/2)
     // body.addShape(cylinderShape, new CANNON.Vec3(0, .2, 0), quaternion)
     body.addShape(cylinderShape, new CANNON.Vec3(0, -.3, 0), quaternion)
-    // body.angularDamping = .9
+    body.angularDamping = .3
     
     body.position.set(0, 0, zPos)
     world.add(body)
@@ -417,6 +473,7 @@ class Home extends React.Component {
       )
 
       world.addConstraint(balloonConstraint)
+      mesh.constraints.push(balloonConstraint)
 
       particles.forEach((particle, index) => {
         if (index < particles.length - 1) {
@@ -431,42 +488,53 @@ class Home extends React.Component {
       })
 
       if (this.groundConstraint) {
-        const groundConstraint = new CANNON.PointToPointConstraint(
+        const constraint = new CANNON.PointToPointConstraint(
           this.groundBody, 
           new CANNON.Vec3(0, this.roomWidth / 2, 0), 
           particles[particles.length - 1],
           new CANNON.Vec3()
         )
-        world.addConstraint(groundConstraint)
+        world.addConstraint(constraint)
+        mesh.constraints.push(constraint)
+      }
+
+      if (this.groupConstraint2 && lastBalloon) {
+        const lastParticle = particles[particles.length - 1]
+        const prevLastParticle = lastBalloon.particles[lastBalloon.particles.length - 1]
+
+        // lastParticle.position.copy(prevLastParticle.position)
+        
+        const constraint = new CANNON.PointToPointConstraint(
+          prevLastParticle, 
+          new CANNON.Vec3(0, 0, 0),
+          lastParticle,
+          new CANNON.Vec3(0, 0, 0)
+        )
+        world.addConstraint(constraint)
+        mesh.constraints.push(constraint)
       }
 
       mesh.particles = particles
       mesh.strMesh = strMesh
     }
 
-    // const balloonConstraint = new CANNON.DistanceConstraint(body, particles[0], 0)
-    // world.addConstraint(balloonConstraint)
-
-    // if (this.groundConstraint) {
-    //   const groundConstraint = new CANNON.PointToPointConstraint(
-    //     this.groundBody, 
-    //     new CANNON.Vec3(0, this.roomWidth / 2, 0), 
-    //     particles[particles.length - 1],
-    //     new CANNON.Vec3()
-    //   )
-    //   world.addConstraint(groundConstraint)
-    // }
-    
-    // particles.forEach((particle, index) => {
-    //   if (index < particles.length - 1) {
-    //     const constraint = new CANNON.DistanceConstraint(particle, particles[index + 1], strHeight / slices)
-    //     world.addConstraint(constraint)
-    //   }
-    // })
+    if (this.groupConstraint && lastBalloon) {
+      const constraint = new CANNON.PointToPointConstraint(
+        lastBalloon.body, 
+        new CANNON.Vec3(0, -height / 2 - .1, 0),
+        body,
+        new CANNON.Vec3(0, -height / 2 - .1, 0),
+      )
+      world.addConstraint(constraint)
+      mesh.constraints.push(constraint)
+    }
     
     mesh.body = body
-
     balloons.push(mesh)
+
+    if (!lastBalloon) {
+      lastBalloon = mesh
+    }
   }
 
   resetBalloon() {
@@ -479,6 +547,10 @@ class Home extends React.Component {
           world.remove(particle)
         })
       }
+
+      balloon.constraints.forEach(constraint => {
+        world.removeConstraint(constraint)
+      })
     })
 
     balloons = []
@@ -530,7 +602,7 @@ class Home extends React.Component {
 
     balloons.forEach(balloon => {
       const point = new CANNON.Vec3()
-      balloon.body.pointToWorldFrame(new CANNON.Vec3(0, .5, 0), point)
+      balloon.body.pointToWorldFrame(new CANNON.Vec3(0, .4, 0), point)
       balloon.body.applyForce(force, point)
 
       balloon.position.copy(balloon.body.position)
@@ -571,6 +643,7 @@ class Home extends React.Component {
 
     const dt = (time - lastTime) / 1000
     world.step(1/60, dt, 3)
+    // world.step(1/60)
     lastTime = time
   }
 
@@ -600,6 +673,10 @@ class Home extends React.Component {
           const index = balloons.indexOf(mesh)
           balloons.splice(index, 1)
           explodedBalloonPosition = child.point
+
+          mesh.constraints.forEach(constraint => {
+            world.removeConstraint(constraint)
+          })
           break
         }
       }
