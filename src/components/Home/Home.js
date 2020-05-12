@@ -80,11 +80,13 @@ class Home extends React.Component {
   }
 
   init() {
+    console.log('[INFO] init')
+
     // THREE
 
     renderer = new THREE.WebGLRenderer({antialias: true, canvas: this.canvas})
     renderer.setSize(innerWidth, innerHeight)
-    // renderer.setPixelRatio(devicePixelRatio)
+    renderer.setPixelRatio(devicePixelRatio)
     renderer.shadowMap.enabled = true
 
     scene = new THREE.Scene()

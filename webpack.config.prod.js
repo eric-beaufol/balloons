@@ -3,7 +3,6 @@ const webpack = require('webpack');
 const CleanWebpackPlugin = require('clean-webpack-plugin');
 const CompressionPlugin = require('compression-webpack-plugin');
 const fs = require('fs');
-const HtmlWebpackPlugin = require('html-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const OptimizeCssAssetsPlugin = require('optimize-css-assets-webpack-plugin');
 const CopyPlugin = require('copy-webpack-plugin');
@@ -59,7 +58,7 @@ const config = {
           {
             loader: 'url-loader',
             options: {
-              limit: 10000
+              limit: 100000
             }
           },
           {
@@ -126,16 +125,9 @@ const config = {
       threshold: 10240,
       minRatio: 0.8
     }),
-    new HtmlWebpackPlugin({
-      hash: true,
-      template: './index.ejs',
-      title: 'Webpack + React',
-      trackingID: ' UA-46712884-10',
-      debug: false
-    }),
     new CopyPlugin([
       { 
-        from: resolve(__dirname, 'src/.htaccess'), 
+        from: resolve(__dirname, 'src/index.html'), 
         to: resolve(__dirname, 'www/')
       }
     ]),
